@@ -10,8 +10,15 @@ import android.os.Build
 import android.os.Process
 import android.provider.Settings
 import androidx.annotation.RequiresApi
+import androidx.compose.runtime.MutableState
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.MutableLiveData
+import com.example.screen_time_record_2.MainActivity
 import com.example.screen_time_record_2.database.UserStats
 import com.example.screen_time_record_2.database.ViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
@@ -22,53 +29,75 @@ class UserStatsService(
     private val date: LocalDate,
     private val context: Context,
     private val db: ViewModel,
-    private val activity: Activity
 ) {
 
-
-    private var stats: Map<String, String> = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-        this.generateStats()
-    } else {
-        TODO("VERSION.SDK_INT < Q")
-    };
-
-    fun getStats(): Map<String, String> {
-        return stats;
+    init {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            this.generateStats()
+        }
     }
 
+    private var stats = MutableLiveData<Map<String, String>>();
+    fun getStats(): MutableLiveData<Map<String, String>> {
+        return stats
+    }
+
+    fun getDate(): LocalDate {
+        return this.date;
+    }
 
     fun saveStats() {
+        GlobalScope.launch(Dispatchers.Main) {
+            stats.observeForever { stats ->
 
-        val date: Date? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            Date.from(this.date.atStartOfDay(ZoneId.systemDefault()).toInstant()) as Date
-        } else {
-            TODO("VERSION.SDK_INT < O")
-        }
+                val date: Date? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    Date.from(date.atStartOfDay(ZoneId.systemDefault()).toInstant()) as Date
+                } else {
+                    TODO("VERSION.SDK_INT < O")
+                }
 
-        val userStats = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            date?.let {
-                UserStats(
-                    date = it,
-                    day_use = stats["Day"].toString(),
-                    night_use = stats["Night"].toString(),
-                    unlocks = stats["Unlocks"].toString(),
-                    id = 0
-                )
+                println("here")
+
+
+                val userStats = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    date?.let {
+                        UserStats(
+                            date = it,
+                            day_use = stats["Day"].toString(),
+                            night_use = stats["Night"].toString(),
+                            unlocks = stats["Unlocks"].toString(),
+                            id = 0
+                        )
+                    }
+                } else {
+                    TODO("VERSION.SDK_INT < O")
+                }
+
+
+                date?.let { date ->
+                    db.getUserStatsByDate(date)
+                        .observeForever { userStats1 ->
+                            println(userStats)
+                            if (userStats1?.let { db.getUserStatsByDate(date) } == null) {
+                                println("here adding new")
+                                userStats?.let { userStats2 ->
+                                    db.insertUserStats(userStats2)
+                                }
+                            } else userStats?.let { userStats3 ->
+                                println("here updating")
+                                db.updateUserStats(userStats3)
+                            }
+                        }
+                }
             }
-        } else {
-            TODO("VERSION.SDK_INT < O")
         }
 
-
-        if (date?.let { db.getUserStatsByDate(date) } == null) {
-            userStats?.let { db.insertUserStats(it) }
-        } else userStats?.let { db.updateUserStats(it) }
 
     }
 
 
     @RequiresApi(Build.VERSION_CODES.Q)
-    fun generateStats(): Map<String, String> {
+    fun generateStats() {
 
         val date: String = this.date.toString()
 
@@ -88,94 +117,137 @@ class UserStatsService(
 
         val localDate: LocalDate = LocalDate.parse(date.toString());
 
-        val date_temp = Date.from(localDate.atStartOfDay(ZoneId.systemDefault()).toInstant())
+        val dateTemp = Date.from(localDate.atStartOfDay(ZoneId.systemDefault()).toInstant())
 
-        val tmp: UserStats? = this.db.getUserStatsByDate(date_temp).value
+        GlobalScope.launch(Dispatchers.Main) {
+            val tmp: Unit = db.getUserStatsByDate(dateTemp)
+                .observeForever { userStats ->
+                    if (userStats != null && localDate != LocalDate.now()) {
+//                load from database
+                        stats.postValue(
+                            mapOf<String, String>(
+                                "Day" to userStats.day_use,
+                                "Night" to userStats.night_use,
+                                "Unlocks" to userStats.unlocks
+                            )
+                        )
+                    } else {
+                        val zoneId = ZoneId.of("Asia/Kolkata")
 
-        if (tmp != null) {
+                        val startOfNight1 =
+                            localDate.atTime(LocalTime.MIDNIGHT).atZone(zoneId).toInstant()
+                                .toEpochMilli()
+                        val endOfNight1 =
+                            localDate.atTime(LocalTime.of(7, 0)).atZone(zoneId).toInstant()
+                                .toEpochMilli()
 
-            return mapOf<String, String>(
-                "Day" to tmp.day_use,
-                "Night" to tmp.night_use,
-                "Unlocks" to tmp.unlocks
-            )
+                        val usageStatsManager =
+                            context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
 
+                        val statsNight1 = usageStatsManager.queryEvents(
+                            startOfNight1,
+                            endOfNight1
+                        )
+
+                        val startOfNight2 =
+                            localDate.atTime(LocalTime.of(19, 0)).atZone(zoneId).toInstant()
+                                .toEpochMilli()
+                        val endOfNight2 =
+                            localDate.atTime(LocalTime.of(23, 59, 59)).atZone(zoneId).toInstant()
+                                .toEpochMilli()
+
+                        val statsNight2 = usageStatsManager.queryEvents(
+                            startOfNight2,
+                            endOfNight2
+                        )
+
+                        val totalNightTime: Long =
+                            (calculateScreenTime(statsNight1, startOfNight1, endOfNight1)
+                                ?: 0) + (calculateScreenTime(
+                                statsNight2,
+                                startOfNight2,
+                                endOfNight2
+                            )
+                                ?: 0)
+
+
+                        val startOfDay =
+                            localDate.atTime(LocalTime.of(7, 0)).atZone(zoneId).toInstant()
+                                .toEpochMilli()
+                        val endOfDay =
+                            localDate.atTime(LocalTime.of(19, 0)).atZone(zoneId).toInstant()
+                                .toEpochMilli()
+
+                        val dayStats = usageStatsManager.queryEvents(
+                            startOfDay,
+                            endOfDay
+                        );
+                        val totalDayTime: Long =
+                            calculateScreenTime(dayStats, startOfDay, endOfDay) ?: 0
+
+                        val nightHours = totalNightTime / (1000 * 60 * 60)
+                        val nightMinutes = (totalNightTime % (1000 * 60 * 60)) / (1000 * 60)
+                        val nightDurationTime = "%d:%02d".format(nightHours, nightMinutes)
+
+                        val dayHours = totalDayTime / (1000 * 60 * 60)
+                        val dayMinutes = (totalDayTime % (1000 * 60 * 60)) / (1000 * 60)
+                        val dayDurationTime = "%d:%02d".format(dayHours, dayMinutes)
+
+                        val start_time = startOfNight1
+                        val end_time = endOfNight2
+
+                        val usageEvents = usageStatsManager.queryEvents(start_time, end_time);
+                        var unlockCount = 0
+
+                        while (usageEvents.hasNextEvent()) {
+                            val currentEvent = UsageEvents.Event()
+                            usageEvents.getNextEvent(currentEvent)
+                            if (currentEvent.eventType == UsageEvents.Event.KEYGUARD_HIDDEN) {
+                                unlockCount++
+                            }
+                        }
+
+
+
+                        stats.postValue(
+                            mapOf<String, String>(
+                                "Day" to dayDurationTime,
+                                "Night" to nightDurationTime,
+                                "Unlocks" to unlockCount.toString()
+                            )
+                        )
+
+                        saveStats()
+                    }
+                }
         }
-
-        val zoneId = ZoneId.of("Asia/Kolkata")
-
-        val startOfNight1 =
-            localDate.atTime(LocalTime.MIDNIGHT).atZone(zoneId).toInstant().toEpochMilli()
-        val endOfNight1 =
-            localDate.atTime(LocalTime.of(7, 0)).atZone(zoneId).toInstant().toEpochMilli()
-
-        val usageStatsManager =
-            context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-
-        val statsNight1 = usageStatsManager.queryUsageStats(
-            UsageStatsManager.INTERVAL_BEST,
-            startOfNight1,
-            endOfNight1
-        )
-
-        val startOfNight2 =
-            localDate.atTime(LocalTime.of(19, 0)).atZone(zoneId).toInstant().toEpochMilli()
-        val endOfNight2 =
-            localDate.atTime(LocalTime.of(23, 59, 59)).atZone(zoneId).toInstant().toEpochMilli()
-
-        val statsNight2 = usageStatsManager.queryUsageStats(
-            UsageStatsManager.INTERVAL_BEST,
-            startOfNight2,
-            endOfNight2
-        )
-
-        var totalNightTime: Long = 0
-
-        statsNight1.forEach { totalNightTime += it.totalTimeInForeground }
-        statsNight2.forEach { totalNightTime += it.totalTimeInForeground }
-
-        val startOfDay =
-            localDate.atTime(LocalTime.of(7, 0)).atZone(zoneId).toInstant().toEpochMilli()
-        val endOfDay =
-            localDate.atTime(LocalTime.of(19, 0)).atZone(zoneId).toInstant().toEpochMilli()
-
-        val dayStats = usageStatsManager.queryUsageStats(
-            UsageStatsManager.INTERVAL_BEST,
-            startOfDay,
-            endOfDay
-        );
-        var totalDayTime: Long = 0
-
-        dayStats.forEach { totalDayTime += it.totalTimeInForeground }
-
-        val nightHours = totalNightTime / (1000 * 60 * 60)
-        val nightMinutes = (totalNightTime % (1000 * 60 * 60)) / (1000 * 60)
-        val nightDurationTime = "%d:%02d".format(nightHours, nightMinutes)
-
-        val dayHours = totalDayTime / (1000 * 60 * 60)
-        val dayMinutes = (totalDayTime % (1000 * 60 * 60)) / (1000 * 60)
-        val dayDurationTime = "%d:%02d".format(dayHours, dayMinutes)
-
-        val start_time = startOfNight1
-        val end_time = endOfNight2
-
-        val usageEvents = usageStatsManager.queryEvents(start_time, end_time);
-        var unlockCount = 0
-
-        while (usageEvents.hasNextEvent()) {
-            val currentEvent = UsageEvents.Event()
-            usageEvents.getNextEvent(currentEvent)
-            if (currentEvent.eventType == UsageEvents.Event.KEYGUARD_HIDDEN) {
-                unlockCount++
-            }
-        }
-
-        return mapOf<String, String>(
-            "Day" to dayDurationTime,
-            "Night" to nightDurationTime,
-            "Unlocks" to unlockCount.toString()
-        )
 
     }
 
+    private fun calculateScreenTime(events: UsageEvents, usageStart: Long, usageEnd: Long): Long {
+        var totalTime: Long = 0
+        var lastInteractive: Long = -1
+        while (events.hasNextEvent()) {
+            val currentEvent = UsageEvents.Event()
+            events.getNextEvent(currentEvent)
+            if (currentEvent.eventType == UsageEvents.Event.SCREEN_INTERACTIVE) {
+                lastInteractive = currentEvent.timeStamp
+            }
+            if ((currentEvent.eventType == UsageEvents.Event.SCREEN_NON_INTERACTIVE ||
+                        currentEvent.eventType == UsageEvents.Event.DEVICE_SHUTDOWN) &&
+                lastInteractive != -1L && currentEvent.timeStamp <= usageEnd
+            ) {
+                val timeDiff = currentEvent.timeStamp - lastInteractive
+                if (lastInteractive >= usageStart) {
+                    totalTime += timeDiff
+                } else if (currentEvent.timeStamp >= usageStart) {
+                    totalTime += currentEvent.timeStamp - usageStart
+                }
+                lastInteractive = -1
+            }
+        }
+        return totalTime
+    }
 }
+
+

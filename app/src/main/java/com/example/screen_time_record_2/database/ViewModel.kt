@@ -14,10 +14,15 @@ import java.util.*
 class ViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository: UserStatsRepository
+    val readAll = MutableLiveData<List<UserStats>>()
 
     init {
         val db = UserStatsDatabase.getDatabase(application).userDao()
         repository = UserStatsRepository(db)
+
+        viewModelScope.launch(Dispatchers.IO) {
+            readAll.postValue(repository.getAllUserStats())
+        }
     }
 
     fun insertUserStats(userStats: UserStats) {
