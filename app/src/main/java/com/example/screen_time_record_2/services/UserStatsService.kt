@@ -63,9 +63,9 @@ class UserStatsService(
                     date?.let {
                         UserStats(
                             date = it,
-                            day_use = stats["Day"].toString(),
-                            night_use = stats["Night"].toString(),
-                            unlocks = stats["Unlocks"].toString(),
+                            day_use = stats["day_use"].toString(),
+                            night_use = stats["night_use"].toString(),
+                            unlocks = stats["unlocks"].toString(),
                             id = 0
                         )
                     }
@@ -126,9 +126,9 @@ class UserStatsService(
 //                load from database
                         stats.postValue(
                             mapOf<String, String>(
-                                "Day" to userStats.day_use,
-                                "Night" to userStats.night_use,
-                                "Unlocks" to userStats.unlocks
+                                "day_use" to userStats.day_use,
+                                "night_use" to userStats.night_use,
+                                "unlocks" to userStats.unlocks
                             )
                         )
                     } else {
@@ -211,9 +211,9 @@ class UserStatsService(
 
                         stats.postValue(
                             mapOf<String, String>(
-                                "Day" to dayDurationTime,
-                                "Night" to nightDurationTime,
-                                "Unlocks" to unlockCount.toString()
+                                "day_use" to dayDurationTime,
+                                "night_use" to nightDurationTime,
+                                "unlocks" to unlockCount.toString()
                             )
                         )
 

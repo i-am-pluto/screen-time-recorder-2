@@ -17,14 +17,17 @@ import com.example.screen_time_record_2.database.ViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import java.util.*
 
 class RecordScreenTimeBackgroundService(
     appContext: Context,
     workerParams: WorkerParameters,
     private val db: ViewModel,
+    private val backendApiService: BackendApiService
 ) : Worker(appContext, workerParams) {
 
 
@@ -44,12 +47,7 @@ class RecordScreenTimeBackgroundService(
         db = db,
     )
 
-    private val backendApiService = BackendApiService(
-        context = appContext,
-        sharedPreferences = sharedPreferences,
-        rollNumber = this.getRollNumber(),
-        url = "http://192.168.29.247:3000"
-    )
+
 
 
     override fun doWork(): Result {
@@ -69,15 +67,25 @@ class RecordScreenTimeBackgroundService(
 
                     backendApiService.getLatestUpdatedStatDate().observeForever { dateString ->
 
-                        val date1: LocalDate = LocalDate.parse(dateString)
+
+                        val formatter =
+                            DateTimeFormatter.ofPattern("yyyy-MM-dd") // create a formatter for the input date string
+                        val date1 = LocalDate.parse(
+                            dateString,
+                            formatter
+                        ) // parse the date string to a LocalDate object                        val date1 = LocalDate.parse(cleanedDateString, formatter)
                         val dateTemp =
                             Date.from(date1.atStartOfDay(ZoneId.systemDefault()).toInstant())
                         db.getUserStatsAfterDate(dateTemp).observeForever { userStatsList ->
                             var sendDataList: MutableMap<String, MutableMap<String, String?>> =
                                 mutableMapOf()
                             userStatsList.forEach { userStats1 ->
-                                val d1 = userStats1.date.toString()
-                                sendDataList[d1] = mutableMapOf(
+                                val d1 = userStats1.date
+
+                                val dateFormat = SimpleDateFormat("yyyy-MM-dd")
+                                val formattedDate = dateFormat.format(d1)
+
+                                sendDataList[formattedDate] = mutableMapOf(
                                     "day_use" to userStats1.day_use,
                                     "night_use" to userStats1.day_use,
                                     "unlocks" to userStats1.day_use
@@ -90,6 +98,8 @@ class RecordScreenTimeBackgroundService(
                                     "night_use" to stats["night_use"],
                                     "unlocks" to stats["unlocks"]
                                 )
+
+                            println(sendDataList)
 
 
                             val immutableDataList: Map<String, Map<String, String>> =

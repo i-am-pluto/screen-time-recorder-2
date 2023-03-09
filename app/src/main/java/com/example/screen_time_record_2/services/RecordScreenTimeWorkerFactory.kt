@@ -8,7 +8,7 @@ import com.example.screen_time_record_2.database.ViewModel
 import java.time.Duration
 import java.util.concurrent.TimeUnit
 
-class RecordScreenTimeWorkerFactory(private val db: ViewModel) : WorkerFactory() {
+class RecordScreenTimeWorkerFactory(private val db: ViewModel,private val backendApiService: BackendApiService) : WorkerFactory() {
 
     @RequiresApi(Build.VERSION_CODES.O)
     fun scheduleWorker(ctx: Context) {
@@ -27,6 +27,6 @@ class RecordScreenTimeWorkerFactory(private val db: ViewModel) : WorkerFactory()
     override fun createWorker(
         appContext: Context, workerClassName: String, workerParameters: WorkerParameters
     ): ListenableWorker? {
-        return RecordScreenTimeBackgroundService(appContext, workerParameters, db = this.db)
+        return RecordScreenTimeBackgroundService(appContext, workerParameters, db = this.db, backendApiService = backendApiService)
     }
 }

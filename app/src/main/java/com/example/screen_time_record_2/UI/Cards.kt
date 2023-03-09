@@ -50,9 +50,9 @@ class Cards {
         val paddingModifierText = Modifier.padding(horizontal = 10.dp)
 
 
-        var usageTimeDuringDay = stats["Day"]
-        var usageTimeDuringNight = stats["Night"]
-        var unlockCounts = stats["Unlocks"]
+        var usageTimeDuringDay = stats["day_use"]
+        var usageTimeDuringNight = stats["night_use"]
+        var unlockCounts = stats["unlocks"]
 
 
         val leftTextStyle = TextStyle(

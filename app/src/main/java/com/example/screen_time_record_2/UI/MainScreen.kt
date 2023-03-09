@@ -17,6 +17,7 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.Observer
 import com.example.screen_time_record_2.database.ViewModel
+import com.example.screen_time_record_2.services.BackendApiService
 import com.example.screen_time_record_2.services.UserStatsService
 import java.time.LocalDate
 
@@ -25,12 +26,13 @@ class MainScreen(
     private val context: Context,
     private val db: ViewModel,
     private val mainActivity: LifecycleOwner,
-    private val sharedPreferences: SharedPreferences
+    private val sharedPreferences: SharedPreferences,
+    private val backendApiService: BackendApiService,
 ) {
 
 
     private val titles = Titles()
-    private val textFields = TextFields(activity = activity)
+    private val textFields = TextFields(activity = activity, backendApiService = backendApiService)
     private val cards = Cards()
 
     private var stats = MutableLiveData<Map<String, String>>()

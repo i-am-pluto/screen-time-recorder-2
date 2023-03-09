@@ -12,13 +12,12 @@ import androidx.compose.material.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment.Companion.CenterVertically
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.example.screen_time_record_2.R
+import com.example.screen_time_record_2.services.BackendApiService
 
 
-class TextFields(private val activity: Activity) {
+class TextFields(private val activity: Activity, private val backendApiService: BackendApiService) {
 
     @Composable
     fun EnterRollNumber(
@@ -32,7 +31,8 @@ class TextFields(private val activity: Activity) {
             enterRollNumberAlert(
                 rollNumber = rollNumber,
                 onRollNumberChange = onRollNumberChange,
-                sharedPreferences = sharedPreferences
+                sharedPreferences = sharedPreferences,
+                backendApiService = backendApiService
             )
         }
 
@@ -49,23 +49,23 @@ class TextFields(private val activity: Activity) {
                     .weight(4f)
                     .padding(10.dp), enabled = false
             )
-            Button(
-                onClick = {
-                    enterRollNumberAlert(
-                        rollNumber = rollNumber,
-                        onRollNumberChange = onRollNumberChange,
-                        sharedPreferences = sharedPreferences
-                    )
-                },
-                modifier = Modifier
-                    .weight(1f),
-                colors = ButtonDefaults.buttonColors(backgroundColor = Color.Transparent)
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.baseline_edit_24),
-                    contentDescription = null
-                )
-            }
+//            Button(
+//                onClick = {
+//                    enterRollNumberAlert(
+//                        rollNumber = rollNumber,
+//                        onRollNumberChange = onRollNumberChange,
+//                        sharedPreferences = sharedPreferences
+//                    )
+//                },
+//                modifier = Modifier
+//                    .weight(1f),
+//                colors = ButtonDefaults.buttonColors(backgroundColor = Color.Transparent)
+//            ) {
+//                Icon(
+//                    painter = painterResource(id = R.drawable.baseline_edit_24),
+//                    contentDescription = null
+//                )
+//            }
         }
 
     }
@@ -74,8 +74,9 @@ class TextFields(private val activity: Activity) {
     private fun enterRollNumberAlert(
         rollNumber: String,
         onRollNumberChange: (String) -> Unit,
-        error: Boolean = false,
-        sharedPreferences: SharedPreferences
+        error: String = "",
+        sharedPreferences: SharedPreferences,
+        backendApiService: BackendApiService
     ) {
         var builder = AlertDialog.Builder(activity)
         builder.setTitle("Nsut Roll Number")
@@ -85,27 +86,44 @@ class TextFields(private val activity: Activity) {
         val input = EditText(activity)
         input.inputType = InputType.TYPE_CLASS_TEXT
         builder.setView(input)
-        if (error) {
-            input.error = "Enter Correct RollNumber Only ex -- 2020UCA1891"
+        if(error != "") {
+            input.error = error
         }
         builder.setPositiveButton(
             android.R.string.ok
         ) { dialog, which ->
             var temp = input.text.toString()
-            if (temp.matches(Regex("[0-9]{4}[A-Za-z]{3}[0-9]{4}"))) {
-                onRollNumberChange(temp)
-                var editor = sharedPreferences.edit()
-                editor.putString("RollNumber", temp)
-                editor.commit();
-            } else {
-                dialog.dismiss()
-                enterRollNumberAlert(
-                    rollNumber = rollNumber,
-                    onRollNumberChange = onRollNumberChange,
-                    error = true,
-                    sharedPreferences = sharedPreferences
-                )
+
+            var check = temp.matches(Regex("[0-9]{4}[A-Za-z]{3}[0-9]{4}"))
+
+            backendApiService.doesUserExists(temp).observeForever { isUser ->
+                if (check && isUser==false) {
+                    onRollNumberChange(temp)
+                    var editor = sharedPreferences.edit()
+                    editor.putString("RollNumber", temp)
+                    editor.commit();
+                } else if (!check) {
+                    dialog.dismiss()
+                    enterRollNumberAlert(
+                        rollNumber = rollNumber,
+                        onRollNumberChange = onRollNumberChange,
+                        error = "Enter your NSUT RollNumber only example - 2020UCA1891",
+                        sharedPreferences = sharedPreferences,
+                        backendApiService = this.backendApiService
+                    )
+                } else if(isUser == true){
+                    dialog.dismiss()
+                    enterRollNumberAlert(
+                        rollNumber = rollNumber,
+                        onRollNumberChange = onRollNumberChange,
+                        error = "A user with the same roll number already exists. enter a differant roll number of example - 2020UCA1891",
+                        sharedPreferences = sharedPreferences,
+                        backendApiService = this.backendApiService
+                    )
+                }
+
             }
+
 
         }
         builder.setCancelable(false) // do not allow dialog to be cancelled
