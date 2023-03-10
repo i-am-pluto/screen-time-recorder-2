@@ -20,7 +20,7 @@ class BackendApiService(
     private val context: Context,
     private val sharedPreferences: SharedPreferences,
     private val url: String,
-    private val rollNumber: String,
+    private var rollNumber: String = java.util.UUID.randomUUID().toString(),
 ) {
 
     private val cache = DiskBasedCache(context.cacheDir, 1024 * 1024)
@@ -30,6 +30,9 @@ class BackendApiService(
         start()
     }
 
+    fun setRollNumber(rollNumber: String) {
+        this.rollNumber = rollNumber;
+    }
 
     fun getLatestUpdatedStatDate(): MutableLiveData<String> {
         // get the date
@@ -38,8 +41,10 @@ class BackendApiService(
 
         var date = MutableLiveData<String>()
 
-        if (rollNumber == "") return date
-
+        if (rollNumber == "") {
+            Log.d("RollNumber", "Empty")
+        }
+        Log.d("RollNumber", this.rollNumber)
 
         try {
             val reqUrl = "$url/latestupdate?roll_number=$rollNumber"
@@ -76,9 +81,11 @@ class BackendApiService(
 
     fun sendStats(stats: Map<String, Map<String, String>>) {
         val body = JSONObject()
-        if (rollNumber == "")
+        if (rollNumber == "") {
+            Log.d("RollNumber", "Empty")
             return
-
+        }
+        Log.d("RollNumber", this.rollNumber)
         val list = stats.map { (date, usage) ->
             mapOf(
                 "date" to date,
@@ -98,7 +105,7 @@ class BackendApiService(
                 Request.Method.POST, "$url/savestats", body,
                 { response ->
 
-                    if(response.get("success")==true) {
+                    if (response.get("success") == true) {
                         res.postValue(response.get("message").toString())
                     } else {
                         println(response.get("message"))
@@ -124,7 +131,6 @@ class BackendApiService(
         try {
             val reqUrl = "$url/doesuserexists?roll_number=$rollNumber"
             Log.d("url", reqUrl)
-
 
 
             val jsonObjectRequest =

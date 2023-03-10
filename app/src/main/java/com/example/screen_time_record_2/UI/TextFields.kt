@@ -8,13 +8,22 @@ import android.widget.EditText
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment.Companion.CenterVertically
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.screen_time_record_2.R
 import com.example.screen_time_record_2.services.BackendApiService
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
 
 
 class TextFields(private val activity: Activity, private val backendApiService: BackendApiService) {
@@ -41,31 +50,29 @@ class TextFields(private val activity: Activity, private val backendApiService: 
             verticalAlignment = CenterVertically,
             modifier = modifier
         ) {
-
             TextField(
                 value = rollNumber,
-                onValueChange = onRollNumberChange, label = { Text(text = "NSUT ROLL NUMBER") },
+                onValueChange = onRollNumberChange,
+                label = { Text(text = "NSUT ROLL NUMBER") },
                 modifier = Modifier
                     .weight(4f)
-                    .padding(10.dp), enabled = false
+                    .padding(10.dp),
+                enabled = false,
+                colors = TextFieldDefaults.textFieldColors(
+                    backgroundColor = Color.Transparent,
+                    disabledTextColor = Color.Gray,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    errorCursorColor = Color.Red,
+                    errorIndicatorColor = Color.Red
+                ),
+                textStyle = MaterialTheme.typography.subtitle1.copy(
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 0.5.sp
+                ),
+                shape = MaterialTheme.shapes.medium,
+                singleLine = true,
             )
-//            Button(
-//                onClick = {
-//                    enterRollNumberAlert(
-//                        rollNumber = rollNumber,
-//                        onRollNumberChange = onRollNumberChange,
-//                        sharedPreferences = sharedPreferences
-//                    )
-//                },
-//                modifier = Modifier
-//                    .weight(1f),
-//                colors = ButtonDefaults.buttonColors(backgroundColor = Color.Transparent)
-//            ) {
-//                Icon(
-//                    painter = painterResource(id = R.drawable.baseline_edit_24),
-//                    contentDescription = null
-//                )
-//            }
         }
 
     }
@@ -78,55 +85,56 @@ class TextFields(private val activity: Activity, private val backendApiService: 
         sharedPreferences: SharedPreferences,
         backendApiService: BackendApiService
     ) {
-        var builder = AlertDialog.Builder(activity)
-        builder.setTitle("Nsut Roll Number")
+        val builder = MaterialAlertDialogBuilder(activity,R.style.DialogTheme)
+        builder.setTitle("Enter NSUT Roll Number")
         builder.setIcon(R.drawable.baseline_edit_24)
-        builder.setMessage("Must enter NSUT Roll Number for the application to work!!")
 
-        val input = EditText(activity)
-        input.inputType = InputType.TYPE_CLASS_TEXT
-        builder.setView(input)
-        if(error != "") {
-            input.error = error
+        val input = EditText(activity).apply {
+            inputType = InputType.TYPE_CLASS_TEXT
+            hint = "NSUT Roll Number"
+            setText(rollNumber)
+            setSelection(rollNumber.length)
+            if (error.isNotEmpty()) {
+                this.error = error
+            }
         }
-        builder.setPositiveButton(
-            android.R.string.ok
-        ) { dialog, which ->
-            var temp = input.text.toString()
+        builder.setView(input)
 
-            var check = temp.matches(Regex("[0-9]{4}[A-Za-z]{3}[0-9]{4}"))
+        builder.setPositiveButton("Submit") { dialog, which ->
+            val temp = input.text.toString().trim()
+
+            val isValidRollNumber = temp.matches(Regex("[0-9]{4}[A-Za-z]{3}[0-9]{4}"))
 
             backendApiService.doesUserExists(temp).observeForever { isUser ->
-                if (check && isUser==false) {
-                    onRollNumberChange(temp)
-                    var editor = sharedPreferences.edit()
-                    editor.putString("RollNumber", temp)
-                    editor.commit();
-                } else if (!check) {
-                    dialog.dismiss()
-                    enterRollNumberAlert(
-                        rollNumber = rollNumber,
-                        onRollNumberChange = onRollNumberChange,
-                        error = "Enter your NSUT RollNumber only example - 2020UCA1891",
-                        sharedPreferences = sharedPreferences,
-                        backendApiService = this.backendApiService
-                    )
-                } else if(isUser == true){
-                    dialog.dismiss()
-                    enterRollNumberAlert(
-                        rollNumber = rollNumber,
-                        onRollNumberChange = onRollNumberChange,
-                        error = "A user with the same roll number already exists. enter a differant roll number of example - 2020UCA1891",
-                        sharedPreferences = sharedPreferences,
-                        backendApiService = this.backendApiService
-                    )
+                when {
+                    isValidRollNumber && !isUser -> {
+                        onRollNumberChange(temp)
+                        backendApiService.setRollNumber(temp)
+                        sharedPreferences.edit().putString("RollNumber", temp).commit()
+                    }
+                    !isValidRollNumber -> {
+                        enterRollNumberAlert(
+                            rollNumber = rollNumber,
+                            onRollNumberChange = onRollNumberChange,
+                            error = "Invalid NSUT Roll Number format. Example - 2020UCA1891",
+                            sharedPreferences = sharedPreferences,
+                            backendApiService = backendApiService
+                        )
+                    }
+                    else -> {
+                        enterRollNumberAlert(
+                            rollNumber = rollNumber,
+                            onRollNumberChange = onRollNumberChange,
+                            error = "User with same Roll Number already exists. Enter different Roll Number. Example - 2020UCA1891",
+                            sharedPreferences = sharedPreferences,
+                            backendApiService = backendApiService
+                        )
+                    }
                 }
-
             }
-
-
         }
-        builder.setCancelable(false) // do not allow dialog to be cancelled
+        builder.setCancelable(false)
         builder.show()
     }
+
 }

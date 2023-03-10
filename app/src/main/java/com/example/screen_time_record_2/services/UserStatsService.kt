@@ -101,19 +101,7 @@ class UserStatsService(
 
         val date: String = this.date.toString()
 
-        val appOps: AppOpsManager =
-            context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
 
-        val mode = appOps.unsafeCheckOp(
-            "android:get_usage_stats",
-            Process.myUid(), context.packageName
-        )
-        val granted = mode == AppOpsManager.MODE_ALLOWED
-
-        if (!granted) {
-            val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
-            context.startActivity(intent);
-        }
 
         val localDate: LocalDate = LocalDate.parse(date.toString());
 
@@ -132,6 +120,25 @@ class UserStatsService(
                             )
                         )
                     } else {
+
+                        val appOps: AppOpsManager =
+                            context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+
+                        val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            appOps.unsafeCheckOp(
+                                "android:get_usage_stats", Process.myUid(), context.packageName
+                            )
+                        } else {
+                            TODO("VERSION.SDK_INT < Q")
+                        }
+
+                        val granted = mode == AppOpsManager.MODE_ALLOWED
+
+                        if (!granted) {
+                            return@observeForever;
+                        }
+
+
                         val zoneId = ZoneId.of("Asia/Kolkata")
 
                         val startOfNight1 =

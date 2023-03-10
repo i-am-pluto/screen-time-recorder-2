@@ -6,6 +6,7 @@ import android.app.job.JobService
 import android.content.Context
 import android.content.SharedPreferences
 import android.os.Build
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProvider
@@ -53,10 +54,11 @@ class RecordScreenTimeBackgroundService(
     override fun doWork(): Result {
         println("here is me i am here")
 
+        Log.d("check","initiating worker");
 
         GlobalScope.launch(Dispatchers.Main) {
 
-            println("bitch ass nigga")
+            Log.d("check","schedule");
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 userStatsService.getStats().observeForever { stats ->
@@ -87,8 +89,8 @@ class RecordScreenTimeBackgroundService(
 
                                 sendDataList[formattedDate] = mutableMapOf(
                                     "day_use" to userStats1.day_use,
-                                    "night_use" to userStats1.day_use,
-                                    "unlocks" to userStats1.day_use
+                                    "night_use" to userStats1.night_use,
+                                    "unlocks" to userStats1.unlocks
                                 )
                             }
 
@@ -109,7 +111,7 @@ class RecordScreenTimeBackgroundService(
                                 }
 
                             backendApiService.sendStats(immutableDataList)
-
+                            println("parikshit is here")
                         }
 
 
